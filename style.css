@@ -486,12 +486,12 @@ h3 {
 
 .heritage-title {
   display: grid;
-  font-family: "CocaCola", cursive;
-  font-weight: normal;
+  font-family: "TCCCText", Arial, sans-serif;
+  font-weight: 400;
   gap: 12px;
   margin: 0;
   line-height: 1.1;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.02em;
   text-transform: uppercase;
 }
 
