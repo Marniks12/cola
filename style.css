@@ -755,7 +755,7 @@ body[data-theme="classic"] .product-card .card-emoji {
   box-shadow: 0 30px 68px color-mix(in srgb, var(--coke-red) 22%, rgba(65, 35, 16, 0.16));
 }
 
-.magic-panel .shake-instruction {
+.shake-instruction {
   position: absolute;
   inset: 50% auto auto 50%;
   transform: translate(-50%, -50%);
@@ -771,7 +771,7 @@ body[data-theme="classic"] .product-card .card-emoji {
     transform 420ms ease;
 }
 
-.magic-panel .magic-reveal-content {
+.magic-reveal-content {
   position: absolute;
   top: 50%;
   left: 50%;
