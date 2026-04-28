@@ -467,6 +467,10 @@ h3 {
   margin-right: auto;
 }
 
+.collection-panel .subtitle {
+  color: #181311;
+}
+
 .heritage-layout {
   width: 100%;
   display: grid;
@@ -512,7 +516,7 @@ h3 {
 }
 
 .heritage-title strong {
-  color: #ff2638;
+  color: #181311;
   font-style: normal;
 }
 
