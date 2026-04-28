@@ -431,6 +431,10 @@ h2 {
   line-height: 1.2;
 }
 
+.collection-title {
+  letter-spacing: -0.01em;
+}
+
 h3 {
   margin: 0 0 10px;
   font-family: Arial, sans-serif;
