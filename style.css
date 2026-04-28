@@ -759,7 +759,7 @@ body[data-theme="classic"] .product-card .card-emoji {
   position: absolute;
   inset: 50% auto auto 50%;
   transform: translate(-50%, -50%);
-  z-index: 2;
+  z-index: 8;
   font-size: clamp(14px, 1.3vw, 16px);
   font-weight: 600;
   line-height: 24px;
@@ -777,7 +777,7 @@ body[data-theme="classic"] .product-card .card-emoji {
   left: 50%;
   width: min(520px, 56vw);
   text-align: center;
-  z-index: 2;
+  z-index: 8;
   opacity: 0;
   transform: translate(-50%, calc(-50% + 20px)) rotate(0deg);
   transform-origin: center center;
