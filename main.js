@@ -92,7 +92,7 @@ const CAN_FLAVOR_CONFIG = {
 
 const current = {
   x: 1.35,
-  y: 0.1,
+  y: -0.04,
   z: 0,
   scale: 1.35,
   rx: 0.55,
@@ -234,7 +234,7 @@ function getMainKeyframes() {
     {
       progress: 0,
       x: 1.35,
-      y: 0.1,
+      y: -0.04,
       z: 0,
       scale: 1.35,
       rx: 0.55,
@@ -244,7 +244,7 @@ function getMainKeyframes() {
     {
       progress: clamp(hero + 0.16, 0, 1),
       x: 1.2,
-      y: -0.02,
+      y: -0.12,
       z: -0.1,
       scale: 1.22,
       rx: 0.7,
