@@ -663,6 +663,7 @@ window.addEventListener("resize", () => {
 const revealItems = document.querySelectorAll(
   ".hero-copy, .section-copy, .product-card"
 );
+const writeTitles = document.querySelectorAll(".write-title");
 
 const revealObserver = new IntersectionObserver(
   (entries) => {
@@ -680,6 +681,24 @@ const revealObserver = new IntersectionObserver(
 revealItems.forEach((item, index) => {
   item.style.transitionDelay = `${Math.min(index * 80, 280)}ms`;
   revealObserver.observe(item);
+});
+
+const writeObserver = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+
+      entry.target.classList.add("is-written");
+      writeObserver.unobserve(entry.target);
+    });
+  },
+  {
+    threshold: 0.35,
+  }
+);
+
+writeTitles.forEach((title) => {
+  writeObserver.observe(title);
 });
 
 animate();
