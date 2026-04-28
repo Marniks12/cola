@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coca-Cola Landing Page</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <canvas id="three-canvas"></canvas>
+
+    <div class="page-shell">
+      <div class="site-frame">
+        <header class="site-header">
+          <a class="brand brand-logo" href="#hero" aria-label="Coca-Cola home">
+            <img src="/images/coca-cola-logo.svg" alt="Coca-Cola" />
+          </a>
+          <nav class="site-nav" aria-label="Primary Navigation">
+            <a href="#hero">Home</a>
+            <a href="#collection">Products</a>
+            <a href="#heritage">Story</a>
+            <a href="#magic">Contact</a>
+          </nav>
+        </header>
+
+        <main>
+          <section class="panel hero-panel" id="hero" data-section="hero">
+            <div class="hero-copy">
+              <div class="section-brand-mark">
+                <img src="/images/coca-cola-logo.svg" alt="" aria-hidden="true" />
+              </div>
+              <p class="eyebrow">The Original Spark</p>
+              <h1>Open Happiness</h1>
+              <p class="supporting-copy">Refreshment in motion</p>
+              <p class="subtitle">Join the pop. Taste the difference.</p>
+              <a class="button button-light" href="#collection">Explore Now</a>
+            </div>
+            <div class="motion-trail" aria-hidden="true"></div>
+            <div class="hero-accent" aria-hidden="true"></div>
+          </section>
+
+          <section class="panel collection-panel" id="collection" data-section="collection">
+            <div class="section-copy centered">
+              <div class="section-brand-mark">
+                <img src="/images/coca-cola-logo.svg" alt="" aria-hidden="true" />
+              </div>
+              <p class="eyebrow">Classic Collection</p>
+              <h2>Our Classic Collection</h2>
+              <p class="subtitle">Choose your favorite Coke</p>
+            </div>
+
+            <div class="collection-spacer" aria-hidden="true"></div>
+
+            <div class="card-grid">
+              <article class="product-card" data-flavor="classic" tabindex="0">
+                <div class="card-emoji" aria-hidden="true">🥤</div>
+                <h3>Classic Coke</h3>
+              </article>
+
+              <article class="product-card" data-flavor="zero" tabindex="0">
+                <div class="card-emoji" aria-hidden="true">⚫</div>
+                <h3>Coke Zero</h3>
+              </article>
+
+              <article class="product-card" data-flavor="cherry" tabindex="0">
+                <div class="card-emoji" aria-hidden="true">🍒</div>
+                <h3>Cherry Coke</h3>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel heritage-panel" id="heritage" data-section="heritage">
+            <div class="heritage-layout">
+              <div class="heritage-left">
+                <p class="heritage-eyebrow">Innovation & Heritage</p>
+
+                <h2 class="heritage-title">
+                  <span>Since <strong>1886</strong></span>
+                  <span>Forever <strong>Timeless</strong></span>
+                </h2>
+
+                <p class="heritage-text">
+                  Over a century of perfecting the art of refreshment. Our secret formula,
+                  combined with cutting-edge technology, creates an experience that transcends
+                  time.
+                </p>
+
+                <div class="heritage-stats">
+                  <div>
+                    <strong>200+</strong>
+                    <span>Countries</span>
+                  </div>
+                  <div>
+                    <strong>137</strong>
+                    <span>Years</span>
+                  </div>
+                  <div>
+                    <strong>1.9B</strong>
+                    <span>Servings Daily</span>
+                  </div>
+                </div>
+
+                <a class="heritage-button" href="#magic">Explore Heritage</a>
+              </div>
+
+              <div class="heritage-features">
+                <article class="heritage-feature">
+                  <div class="feature-icon"></div>
+                  <h3>Secret Formula</h3>
+                  <p>Protected for over a century</p>
+                </article>
+
+                <article class="heritage-feature">
+                  <div class="feature-icon"></div>
+                  <h3>Global Reach</h3>
+                  <p>200+ countries served</p>
+                </article>
+
+                <article class="heritage-feature">
+                  <div class="feature-icon">♻️</div>
+                  <h3>Sustainable</h3>
+                  <p>Eco-friendly packaging</p>
+                </article>
+
+                <article class="heritage-feature">
+                  <div class="feature-icon">⚡</div>
+                  <h3>Innovation</h3>
+                  <p>Constant evolution</p>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel magic-panel" id="magic" data-section="magic">
+            <div class="shake-instruction">Shake the can to reveal the magic</div>
+
+            <div class="magic-reveal-content">
+              <div class="section-brand-mark">
+                <img src="/images/coca-cola-logo.svg" alt="" aria-hidden="true" />
+              </div>
+              <p class="eyebrow">Global Flavor</p>
+              <h2>Real Magic Awaits</h2>
+              <p class="subtitle">Refresh your world with every sip.</p>
+              <div class="button-row">
+                <a class="button button-bright" href="./index.html">Get Started</a>
+                <a class="button button-outline" href="#collection">Learn More</a>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
