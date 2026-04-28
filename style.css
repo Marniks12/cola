@@ -6,6 +6,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "CocaCola";
+  src: url("/fonts/coca-cola.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg-dark: #202020;
   --frame-dark: #131313;
@@ -210,46 +218,14 @@ a {
 }
 
 .brand {
-  font-size: 1rem;
-  font-weight: 400;
-  letter-spacing: 0;
+  font-family: "CocaCola", cursive;
+  font-size: 3.4rem;
+  font-weight: normal;
+  letter-spacing: 0.01em;
   text-transform: none;
-  line-height: 1.2;
+  line-height: 0.9;
   color: var(--coke-red);
-}
-
-.brand-logo {
-  display: inline-flex;
-  align-items: center;
-}
-
-.wordmark {
-  display: block;
-  width: 118px;
-  height: auto;
-}
-
-.brand-logo .wordmark {
-  width: 118px;
-}
-
-.section-brand-mark .wordmark {
-  width: 96px;
-  opacity: 0.95;
-}
-
-.hero-copy .section-brand-mark .wordmark {
-  width: 130px;
-}
-
-.section-brand-mark {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 16px;
-}
-
-.hero-copy .section-brand-mark {
-  justify-content: flex-start;
+  white-space: nowrap;
 }
 
 .site-nav {
@@ -440,19 +416,18 @@ a {
 h1,
 h2 {
   margin: 0;
-  font-family: Arial, sans-serif;
+  font-family: "CocaCola", cursive;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
+  font-weight: normal;
 }
 
 h1 {
   font-size: clamp(48px, 6vw, 96px);
-  font-weight: 700;
 }
 
 h2 {
   font-size: clamp(32px, 4vw, 48px);
-  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -511,10 +486,21 @@ h3 {
 
 .heritage-title {
   display: grid;
+  font-family: "CocaCola", cursive;
+  font-weight: normal;
   gap: 12px;
   margin: 0;
   line-height: 1.1;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
+}
+
+.write-title {
+  display: inline-block;
+}
+
+.heritage-title.write-title {
+  display: grid;
 }
 
 .heritage-title span {
@@ -920,21 +906,13 @@ body[data-theme="classic"] .product-card .card-emoji {
     gap: 14px 18px;
   }
 
-  .brand-logo .wordmark {
-    width: 100px;
+  .brand {
+    font-size: 2.8rem;
   }
 
   .hero-panel {
     align-items: end;
     min-height: calc(100svh - 88px);
-  }
-
-  .section-brand-mark .wordmark {
-    width: 96px;
-  }
-
-  .hero-copy .section-brand-mark .wordmark {
-    width: 112px;
   }
 
   .motion-trail {
