@@ -210,9 +210,9 @@ a {
 }
 
 .brand {
-  font-size: 1.15rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0;
   text-transform: none;
   line-height: 1.2;
   color: var(--coke-red);
@@ -223,10 +223,23 @@ a {
   align-items: center;
 }
 
-.brand-logo img {
+.wordmark {
   display: block;
   width: 118px;
   height: auto;
+}
+
+.brand-logo .wordmark {
+  width: 118px;
+}
+
+.section-brand-mark .wordmark {
+  width: 96px;
+  opacity: 0.95;
+}
+
+.hero-copy .section-brand-mark .wordmark {
+  width: 130px;
 }
 
 .section-brand-mark {
@@ -235,18 +248,8 @@ a {
   margin-bottom: 16px;
 }
 
-.section-brand-mark img {
-  width: 96px;
-  height: auto;
-  opacity: 0.95;
-}
-
 .hero-copy .section-brand-mark {
   justify-content: flex-start;
-}
-
-.hero-copy .section-brand-mark img {
-  width: 130px;
 }
 
 .site-nav {
@@ -917,7 +920,7 @@ body[data-theme="classic"] .product-card .card-emoji {
     gap: 14px 18px;
   }
 
-  .brand-logo img {
+  .brand-logo .wordmark {
     width: 100px;
   }
 
@@ -926,7 +929,11 @@ body[data-theme="classic"] .product-card .card-emoji {
     min-height: calc(100svh - 88px);
   }
 
-  .hero-copy .section-brand-mark img {
+  .section-brand-mark .wordmark {
+    width: 96px;
+  }
+
+  .hero-copy .section-brand-mark .wordmark {
     width: 112px;
   }
 
