@@ -501,31 +501,10 @@ h3 {
 
 .write-title {
   display: inline-block;
-  opacity: 0;
-  clip-path: inset(0 100% 0 0);
-  transform: translateY(10px);
 }
 
 .heritage-title.write-title {
   display: grid;
-}
-
-.write-title.is-written {
-  animation: writeTitle 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes writeTitle {
-  0% {
-    opacity: 0;
-    clip-path: inset(0 100% 0 0);
-    transform: translateY(10px);
-  }
-
-  100% {
-    opacity: 1;
-    clip-path: inset(0 0 0 0);
-    transform: translateY(0);
-  }
 }
 
 .heritage-title span {
