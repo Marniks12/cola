@@ -756,10 +756,10 @@ body[data-theme="classic"] .product-card .card-emoji {
 }
 
 .shake-instruction {
-  position: absolute;
+  position: relative;
   inset: 50% auto auto 50%;
   transform: translate(-50%, -50%);
-  z-index: 8;
+  z-index: 20;
   font-size: clamp(14px, 1.3vw, 16px);
   font-weight: 600;
   line-height: 24px;
@@ -777,7 +777,7 @@ body[data-theme="classic"] .product-card .card-emoji {
   left: 50%;
   width: min(520px, 56vw);
   text-align: center;
-  z-index: 8;
+  z-index: 20;
   opacity: 0;
   transform: translate(-50%, calc(-50% + 20px)) rotate(0deg);
   transform-origin: center center;
@@ -791,6 +791,14 @@ body[data-theme="classic"] .product-card .card-emoji {
   max-width: 28ch;
   margin-left: auto;
   margin-right: auto;
+}
+
+.magic-panel .section-copy,
+.magic-panel .button-row,
+.magic-panel h2,
+.magic-panel p {
+  position: relative;
+  z-index: 20;
 }
 
 .magic-panel.revealed .magic-reveal-content {

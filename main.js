@@ -273,10 +273,10 @@ function getMainKeyframes() {
     },
     {
       progress: clamp(magic - 0.08, 0, 1),
-      x: 0.25,
-      y: 0.08,
-      z: 0,
-      scale: 0.94,
+      x: 0,
+      y: 0.05,
+      z: -1.2,
+      scale: 0.9,
       rx: 0.16,
       ry: 0.55,
       rz: -5.95,
@@ -284,9 +284,9 @@ function getMainKeyframes() {
     {
       progress: 1,
       x: 0,
-      y: -0.02,
-      z: 0,
-      scale: 1.08,
+      y: 0.05,
+      z: -1.2,
+      scale: 0.9,
       rx: 0.08,
       ry: 0.08,
       rz: -6.28,
@@ -461,6 +461,13 @@ function updateMainCan(progress) {
     );
     material.emissiveIntensity =
       0.12 + heritageGlow * 0.18 + shakeBlend * 1.05 + revealGlow * 1.1;
+  });
+
+  const finalOpacity = isMagicActive ? 0.72 : 1;
+  canMaterials.forEach((material) => {
+    material.transparent = finalOpacity < 1;
+    material.opacity = finalOpacity;
+    material.needsUpdate = true;
   });
 
   let finalX = current.x;
