@@ -2,7 +2,6 @@ const canvas = document.getElementById("three-canvas");
 const magicPanel = document.querySelector("#magic");
 const motionTrail = document.querySelector(".motion-trail");
 const body = document.body;
-const productCards = Array.from(document.querySelectorAll(".product-card"));
 
 let THREE = null;
 let scene = null;
@@ -59,6 +58,10 @@ const current = {
   ry: -0.35,
   rz: -0.65,
 };
+
+function getProductCards() {
+  return Array.from(document.querySelectorAll(".product-card"));
+}
 
 function startScene(threeModule, GLTFLoader) {
   if (!canvas || hasInitializedThree) return;
@@ -617,7 +620,7 @@ function applyFlavorTheme(flavor) {
     delete body.dataset.theme;
   }
 
-  productCards.forEach((card) => {
+  getProductCards().forEach((card) => {
     card.classList.toggle("is-selected", Boolean(flavor) && card.dataset.flavor === flavor);
   });
 }
@@ -627,7 +630,7 @@ function attachProductCardListeners() {
 
   hasAttachedProductCardListeners = true;
 
-  productCards.forEach((card) => {
+  getProductCards().forEach((card) => {
     const activate = () => {
       const flavor = card.dataset.flavor || "classic";
       setSelectedFlavor(flavor);
