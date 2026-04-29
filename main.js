@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const canvas = document.querySelector("#three-canvas");
 const magicPanel = document.querySelector("#magic");
@@ -24,7 +23,7 @@ const renderer = new THREE.WebGLRenderer({
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
@@ -46,10 +45,11 @@ scene.add(rimLight);
 const rubLight = new THREE.PointLight(0xff5a36, 0, 9, 2);
 scene.add(rubLight);
 
-const loader = new GLTFLoader();
 const canScreenPosition = new THREE.Vector3();
 
 let can = null;
+let canLoadPromise = null;
+let activeCanLoadId = 0;
 let canSpin = 0;
 let currentSpinVelocity = 0;
 let shakeProgress = 0;
@@ -62,33 +62,8 @@ let canBaseScale = 1;
 let currentCanFlavor = "classic";
 
 const canMaterials = [];
-
-const CAN_FLAVOR_CONFIG = {
-  classic: {
-    path: "/models/coke-can.glb",
-    scaleDivisor: 1.45,
-    metalness: 0.3,
-    roughness: 0.22,
-    envMapIntensity: 1.28,
-    resetRoot: false,
-  },
-  zero: {
-    path: "/models/coke_zero.glb",
-    scaleDivisor: 1.62,
-    metalness: 0.62,
-    roughness: 0.14,
-    envMapIntensity: 1.55,
-    resetRoot: true,
-  },
-  cherry: {
-    path: "/models/cherry.glb",
-    scaleDivisor: 1.56,
-    metalness: 0.38,
-    roughness: 0.2,
-    envMapIntensity: 1.34,
-    resetRoot: true,
-  },
-};
+const MAIN_CAN_PATH = "/models/coke-can.glb";
+const MAIN_CAN_SCALE_DIVISOR = 1.45;
 
 const current = {
   x: 1.35,
@@ -328,20 +303,27 @@ function getInterpolatedState(progress) {
 }
 
 function clearCanMaterials() {
+  canMaterials.forEach((material) => material.dispose());
   canMaterials.length = 0;
 }
 
 function applyMainCanMaterials(model, flavor) {
-  const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
   clearCanMaterials();
+
+  const materialConfig =
+    flavor === "zero"
+      ? { metalness: 0.62, roughness: 0.14, envMapIntensity: 1.55 }
+      : flavor === "cherry"
+        ? { metalness: 0.38, roughness: 0.2, envMapIntensity: 1.34 }
+        : { metalness: 0.3, roughness: 0.22, envMapIntensity: 1.28 };
 
   model.traverse((child) => {
     if (!child.isMesh || !child.material) return;
 
     child.material = child.material.clone();
-    child.material.metalness = flavorConfig.metalness;
-    child.material.roughness = flavorConfig.roughness;
-    child.material.envMapIntensity = flavorConfig.envMapIntensity;
+    child.material.metalness = materialConfig.metalness;
+    child.material.roughness = materialConfig.roughness;
+    child.material.envMapIntensity = materialConfig.envMapIntensity;
 
     if ("emissive" in child.material) {
       child.material.emissive.setRGB(0, 0, 0);
@@ -353,45 +335,68 @@ function applyMainCanMaterials(model, flavor) {
   });
 }
 
-function loadMainCan(flavor = "classic") {
-  const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
+async function getMainCanLoader() {
+  if (!canLoadPromise) {
+    canLoadPromise = import("three/examples/jsm/loaders/GLTFLoader.js").then(
+      ({ GLTFLoader }) => new GLTFLoader()
+    );
+  }
 
-  loader.load(
-    flavorConfig.path,
-    (gltf) => {
-      if (can) {
-        scene.remove(can);
-      }
+  return canLoadPromise;
+}
 
-      can = gltf.scene;
-      can.userData.flavor = flavor;
+async function loadMainCan(flavor = "classic") {
+  const loadId = ++activeCanLoadId;
 
-      if (flavorConfig.resetRoot) {
-        const specialRoot = can.children[0];
-        if (specialRoot) {
-          specialRoot.position.set(0, 0, 0);
+  try {
+    const loader = await getMainCanLoader();
+
+    loader.load(
+      MAIN_CAN_PATH,
+      (gltf) => {
+        if (loadId !== activeCanLoadId) return;
+
+        if (can) {
+          scene.remove(can);
         }
+
+        can = gltf.scene;
+        can.userData.flavor = flavor;
+
+        const box = new THREE.Box3().setFromObject(can);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z) || 1;
+
+        can.position.sub(center);
+        canBaseScale = MAIN_CAN_SCALE_DIVISOR / maxDim;
+
+        applyMainCanMaterials(can, flavor);
+
+        scene.add(can);
+        currentCanFlavor = flavor;
+        updateMainCan(getScrollProgress());
+      },
+      undefined,
+      (error) => {
+        console.error("Main model could not load:", error);
       }
+    );
+  } catch (error) {
+    console.error("Main model loader could not initialize:", error);
+  }
+}
 
-      const box = new THREE.Box3().setFromObject(can);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+function scheduleMainCanLoad() {
+  const startLoad = () => {
+    void loadMainCan("classic");
+  };
 
-      can.position.sub(center);
-      canBaseScale = flavorConfig.scaleDivisor / maxDim;
-
-      applyMainCanMaterials(can, flavor);
-
-      scene.add(can);
-      currentCanFlavor = flavor;
-      updateMainCan(getScrollProgress());
-    },
-    undefined,
-    (error) => {
-      console.error("Main model could not load:", error);
-    }
-  );
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(startLoad, { timeout: 1200 });
+  } else {
+    window.setTimeout(startLoad, 300);
+  }
 }
 
 function updateCanScreenPosition() {
@@ -523,12 +528,12 @@ productCards.forEach((card) => {
     const flavor = card.dataset.flavor || null;
     applyFlavorTheme(flavor);
 
-    if (flavor === "zero" && currentCanFlavor !== "zero") {
-      loadMainCan("zero");
-    } else if (flavor === "cherry" && currentCanFlavor !== "cherry") {
-      loadMainCan("cherry");
-    } else if (flavor === "classic" && currentCanFlavor !== "classic") {
-      loadMainCan("classic");
+    if (flavor && currentCanFlavor !== flavor) {
+      currentCanFlavor = flavor;
+      if (can) {
+        can.userData.flavor = flavor;
+        applyMainCanMaterials(can, flavor);
+      }
     }
   };
 
@@ -622,11 +627,16 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-loadMainCan("classic");
 syncMagicRevealState();
 ensureHeroBubbles();
 ensureMagicBurstBubbles();
 applyFlavorTheme(null);
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", scheduleMainCanLoad, { once: true });
+} else {
+  scheduleMainCanLoad();
+}
 
 window.addEventListener("pointermove", (event) => {
   handleShakeMove(event.clientX, event.clientY);
@@ -662,7 +672,7 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
 
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
   sectionStops = getSectionStops();
 });
