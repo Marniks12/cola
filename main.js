@@ -14,7 +14,6 @@ let canScreenPosition = null;
 let hasRetriedThreeInit = false;
 let hasStartedThreeInit = false;
 let hasInitializedThree = false;
-let hasAttachedProductCardListeners = false;
 
 let can = null;
 let activeCanLoadId = 0;
@@ -30,25 +29,8 @@ let canBaseScale = 1;
 let currentCanFlavor = "classic";
 
 const canMaterials = [];
-const FLAVOR_CONFIG = {
-  classic: {
-    path: "/models/coke-can.glb",
-    scaleDivisor: 1.45,
-    materialFlavor: "classic",
-  },
-  zero: {
-    path: "/models/coke-zero.glb",
-    scaleDivisor: 1.62,
-    materialFlavor: "zero",
-  },
-  cherry: {
-    path: "/models/cherry.glb",
-    scaleDivisor: 1.56,
-    materialFlavor: "cherry",
-    fallbackPath: "/models/coke-can.glb",
-    fallbackScaleDivisor: 1.45,
-  },
-};
+const MAIN_CAN_PATH = "/models/coke-can.glb";
+const MAIN_CAN_SCALE_DIVISOR = 1.45;
 
 const current = {
   x: 1.35,
@@ -107,8 +89,7 @@ function startScene(threeModule, GLTFLoader) {
   loader = new GLTFLoader();
   hasInitializedThree = true;
 
-  attachProductCardListeners();
-  void setSelectedFlavor(currentCanFlavor);
+  void loadMainCan("classic");
   animate();
 }
 
@@ -403,29 +384,20 @@ function applyMainCanMaterials(model, flavor) {
   });
 }
 
-function loadFlavorModel({
-  flavor,
-  path,
-  scaleDivisor,
-  materialFlavor,
-  fallbackPath = null,
-  fallbackScaleDivisor = null,
-}) {
+async function loadMainCan(flavor = "classic") {
   if (!loader || !scene || !THREE) return;
 
   const loadId = ++activeCanLoadId;
-  const existingCan = can;
-
-  if (existingCan) {
-    scene.remove(existingCan);
-    can = null;
-  }
 
   try {
     loader.load(
-      path,
+      MAIN_CAN_PATH,
       (gltf) => {
         if (loadId !== activeCanLoadId) return;
+
+        if (can) {
+          scene.remove(can);
+        }
 
         can = gltf.scene;
         can.userData.flavor = flavor;
@@ -436,9 +408,9 @@ function loadFlavorModel({
         const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
         can.position.sub(center);
-        canBaseScale = scaleDivisor / maxDim;
+        canBaseScale = MAIN_CAN_SCALE_DIVISOR / maxDim;
 
-        applyMainCanMaterials(can, materialFlavor);
+        applyMainCanMaterials(can, flavor);
 
         scene.add(can);
         currentCanFlavor = flavor;
@@ -446,56 +418,12 @@ function loadFlavorModel({
       },
       undefined,
       (error) => {
-        if (loadId !== activeCanLoadId) return;
-
-        if (fallbackPath) {
-          loadFlavorModel({
-            flavor,
-            path: fallbackPath,
-            scaleDivisor: fallbackScaleDivisor ?? scaleDivisor,
-            materialFlavor,
-          });
-          return;
-        }
-
         console.error("Main model could not load:", error);
-
-        if (existingCan) {
-          scene.add(existingCan);
-          can = existingCan;
-          updateMainCan(getScrollProgress());
-        }
       }
     );
   } catch (error) {
     console.error("Main model loader could not initialize:", error);
-
-    if (existingCan) {
-      scene.add(existingCan);
-      can = existingCan;
-      updateMainCan(getScrollProgress());
-    }
   }
-}
-
-function setSelectedFlavor(flavor) {
-  const nextFlavor = FLAVOR_CONFIG[flavor] ? flavor : "classic";
-  const config = FLAVOR_CONFIG[nextFlavor];
-
-  console.log("Selected flavor:", nextFlavor);
-  applyFlavorTheme(nextFlavor);
-  currentCanFlavor = nextFlavor;
-
-  if (!loader || !scene || !THREE) return;
-
-  loadFlavorModel({
-    flavor: nextFlavor,
-    path: config.path,
-    scaleDivisor: config.scaleDivisor,
-    materialFlavor: config.materialFlavor,
-    fallbackPath: config.fallbackPath,
-    fallbackScaleDivisor: config.fallbackScaleDivisor,
-  });
 }
 
 function updateCanScreenPosition() {
@@ -622,26 +550,28 @@ function applyFlavorTheme(flavor) {
   });
 }
 
-function attachProductCardListeners() {
-  if (hasAttachedProductCardListeners) return;
+productCards.forEach((card) => {
+  const activate = () => {
+    const flavor = card.dataset.flavor || null;
+    applyFlavorTheme(flavor);
 
-  hasAttachedProductCardListeners = true;
-
-  productCards.forEach((card) => {
-    const activate = () => {
-      const flavor = card.dataset.flavor || "classic";
-      setSelectedFlavor(flavor);
-    };
-
-    card.addEventListener("click", activate);
-    card.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        activate();
+    if (flavor && currentCanFlavor !== flavor) {
+      currentCanFlavor = flavor;
+      if (can) {
+        can.userData.flavor = flavor;
+        applyMainCanMaterials(can, flavor);
       }
-    });
+    }
+  };
+
+  card.addEventListener("click", activate);
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      activate();
+    }
   });
-}
+});
 
 /* FINAL SHAKE REVEAL */
 
@@ -729,7 +659,7 @@ function animate() {
 syncMagicRevealState();
 ensureHeroBubbles();
 ensureMagicBurstBubbles();
-applyFlavorTheme("classic");
+applyFlavorTheme(null);
 
 if (document.readyState === "loading") {
   window.addEventListener("load", safeInit, { once: true });
