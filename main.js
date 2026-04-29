@@ -1,54 +1,21 @@
-import * as THREE from "three";
-
-const canvas = document.querySelector("#three-canvas");
+const canvas = document.getElementById("three-canvas");
 const magicPanel = document.querySelector("#magic");
 const motionTrail = document.querySelector(".motion-trail");
 const body = document.body;
 const productCards = Array.from(document.querySelectorAll(".product-card"));
 
-const scene = new THREE.Scene();
-
-const camera = new THREE.PerspectiveCamera(
-  38,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  100
-);
-camera.position.set(0, 0, 7.2);
-
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  alpha: true,
-  antialias: true,
-});
-
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
-
-scene.add(new THREE.AmbientLight(0xffffff, 1.85));
-
-const keyLight = new THREE.DirectionalLight(0xffffff, 3);
-keyLight.position.set(4.5, 5.5, 6);
-scene.add(keyLight);
-
-const fillLight = new THREE.DirectionalLight(0xffffff, 1.4);
-fillLight.position.set(-5, 1.5, 4);
-scene.add(fillLight);
-
-const rimLight = new THREE.DirectionalLight(0xffe2d5, 1.15);
-rimLight.position.set(2.2, 0.8, -4.8);
-scene.add(rimLight);
-
-const rubLight = new THREE.PointLight(0xff5a36, 0, 9, 2);
-scene.add(rubLight);
-
-const canScreenPosition = new THREE.Vector3();
+let THREE = null;
+let scene = null;
+let camera = null;
+let renderer = null;
+let loader = null;
+let rubLight = null;
+let canScreenPosition = null;
+let hasRetriedThreeInit = false;
+let hasStartedThreeInit = false;
+let hasInitializedThree = false;
 
 let can = null;
-let canLoadPromise = null;
 let activeCanLoadId = 0;
 let canSpin = 0;
 let currentSpinVelocity = 0;
@@ -74,6 +41,88 @@ const current = {
   ry: -0.35,
   rz: -0.65,
 };
+
+function startScene(threeModule, GLTFLoader) {
+  if (!canvas || hasInitializedThree) return;
+
+  THREE = threeModule;
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(
+    38,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    100
+  );
+  camera.position.set(0, 0, 7.2);
+
+  renderer = new THREE.WebGLRenderer({
+    canvas,
+    alpha: true,
+    antialias: true,
+  });
+
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+
+  scene.add(new THREE.AmbientLight(0xffffff, 1.85));
+
+  const keyLight = new THREE.DirectionalLight(0xffffff, 3);
+  keyLight.position.set(4.5, 5.5, 6);
+  scene.add(keyLight);
+
+  const fillLight = new THREE.DirectionalLight(0xffffff, 1.4);
+  fillLight.position.set(-5, 1.5, 4);
+  scene.add(fillLight);
+
+  const rimLight = new THREE.DirectionalLight(0xffe2d5, 1.15);
+  rimLight.position.set(2.2, 0.8, -4.8);
+  scene.add(rimLight);
+
+  rubLight = new THREE.PointLight(0xff5a36, 0, 9, 2);
+  scene.add(rubLight);
+
+  canScreenPosition = new THREE.Vector3();
+  loader = new GLTFLoader();
+  hasInitializedThree = true;
+
+  void loadMainCan("classic");
+  animate();
+}
+
+async function initThree() {
+  if (!canvas || hasInitializedThree) return;
+
+  const threeModule = await import("three");
+  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+
+  startScene(threeModule, GLTFLoader);
+}
+
+async function safeInit() {
+  if (!canvas || hasStartedThreeInit) return;
+
+  hasStartedThreeInit = true;
+
+  try {
+    await initThree();
+  } catch (error) {
+    console.warn("Retrying Three.js init...", error);
+
+    if (!hasRetriedThreeInit) {
+      hasRetriedThreeInit = true;
+      window.setTimeout(() => {
+        hasStartedThreeInit = false;
+        void initThree().catch((retryError) => {
+          console.warn("Three.js retry failed.", retryError);
+        });
+      }, 500);
+    }
+  }
+}
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -335,22 +384,12 @@ function applyMainCanMaterials(model, flavor) {
   });
 }
 
-async function getMainCanLoader() {
-  if (!canLoadPromise) {
-    canLoadPromise = import("three/examples/jsm/loaders/GLTFLoader.js").then(
-      ({ GLTFLoader }) => new GLTFLoader()
-    );
-  }
-
-  return canLoadPromise;
-}
-
 async function loadMainCan(flavor = "classic") {
+  if (!loader || !scene || !THREE) return;
+
   const loadId = ++activeCanLoadId;
 
   try {
-    const loader = await getMainCanLoader();
-
     loader.load(
       MAIN_CAN_PATH,
       (gltf) => {
@@ -387,20 +426,8 @@ async function loadMainCan(flavor = "classic") {
   }
 }
 
-function scheduleMainCanLoad() {
-  const startLoad = () => {
-    void loadMainCan("classic");
-  };
-
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(startLoad, { timeout: 1200 });
-  } else {
-    window.setTimeout(startLoad, 300);
-  }
-}
-
 function updateCanScreenPosition() {
-  if (!can) return null;
+  if (!can || !camera || !canScreenPosition) return null;
 
   canScreenPosition.copy(can.position);
   canScreenPosition.project(camera);
@@ -618,6 +645,8 @@ function handleShakeMove(currentX, currentY) {
 /* REVEAL OBSERVER */
 
 function animate() {
+  if (!renderer || !scene || !camera) return;
+
   const progress = getScrollProgress();
 
   updateMotionTrail(progress);
@@ -633,9 +662,9 @@ ensureMagicBurstBubbles();
 applyFlavorTheme(null);
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", scheduleMainCanLoad, { once: true });
+  window.addEventListener("load", safeInit, { once: true });
 } else {
-  scheduleMainCanLoad();
+  void safeInit();
 }
 
 window.addEventListener("pointermove", (event) => {
@@ -668,6 +697,11 @@ window.addEventListener("touchcancel", () => {
 });
 
 window.addEventListener("resize", () => {
+  if (!camera || !renderer) {
+    sectionStops = getSectionStops();
+    return;
+  }
+
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 
@@ -698,5 +732,3 @@ revealItems.forEach((item, index) => {
   item.style.transitionDelay = `${Math.min(index * 80, 280)}ms`;
   revealObserver.observe(item);
 });
-
-animate();
