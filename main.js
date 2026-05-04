@@ -62,33 +62,23 @@ let canBaseScale = 1;
 let currentCanFlavor = "classic";
 
 const canMaterials = [];
+let currentCanColor = new THREE.Color("#e61c2a");
+let targetCanColor = new THREE.Color("#e61c2a");
 
 const CAN_FLAVOR_CONFIG = {
   classic: {
-    path: "/models/coke-can.glb",
-    scaleDivisor: 1.45,
-    metalness: 0.3,
-    roughness: 0.22,
-    envMapIntensity: 1.28,
-    resetRoot: false,
+    color: "#e61c2a",
   },
   zero: {
-    path: "/models/coke_zero.glb",
-    scaleDivisor: 1.62,
-    metalness: 0.62,
-    roughness: 0.14,
-    envMapIntensity: 1.55,
-    resetRoot: true,
+    color: "#090909",
   },
   cherry: {
-    path: "/models/cherry.glb",
-    scaleDivisor: 1.56,
-    metalness: 0.38,
-    roughness: 0.2,
-    envMapIntensity: 1.34,
-    resetRoot: true,
+    color: "#7b0014",
   },
 };
+
+const MAIN_CAN_MODEL_PATH = "/models/coke-can.glb";
+const MAIN_CAN_SCALE_DIVISOR = 1.45;
 
 const current = {
   x: 1.35,
@@ -331,47 +321,58 @@ function clearCanMaterials() {
   canMaterials.length = 0;
 }
 
-function applyMainCanMaterials(model, flavor) {
-  const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
+function isRecolorableCanMaterial(material) {
+  if (!material || !material.color) return false;
+
+  const name = (material.name || "").toLowerCase();
+  if (name.includes("white") || name.includes("logo") || name.includes("text")) return false;
+  if (name.includes("metal")) return false;
+
+  const { r, g, b } = material.color;
+  const isRedDominant = r > g * 1.15 && r > b * 1.15;
+  const isDarkOrRed = r > 0.18 || (r < 0.18 && g < 0.18 && b < 0.18);
+
+  return isRedDominant || isDarkOrRed;
+}
+
+function applyMainCanMaterials(model) {
   clearCanMaterials();
 
   model.traverse((child) => {
     if (!child.isMesh || !child.material) return;
 
-    child.material = child.material.clone();
-    child.material.metalness = flavorConfig.metalness;
-    child.material.roughness = flavorConfig.roughness;
-    child.material.envMapIntensity = flavorConfig.envMapIntensity;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    const clonedMaterials = materials.map((material) => {
+      const cloned = material.clone();
 
-    if ("emissive" in child.material) {
-      child.material.emissive.setRGB(0, 0, 0);
-      child.material.emissiveIntensity = 0;
-    }
+      if ("emissive" in cloned) {
+        cloned.emissive.setRGB(0, 0, 0);
+        cloned.emissiveIntensity = 0;
+      }
 
-    child.material.needsUpdate = true;
-    canMaterials.push(child.material);
+      cloned.needsUpdate = true;
+
+      if (isRecolorableCanMaterial(cloned)) {
+        canMaterials.push(cloned);
+      }
+
+      return cloned;
+    });
+
+    child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
   });
 }
 
-function loadMainCan(flavor = "classic") {
-  const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
-
+function loadMainCan() {
   loader.load(
-    flavorConfig.path,
+    MAIN_CAN_MODEL_PATH,
     (gltf) => {
       if (can) {
         scene.remove(can);
       }
 
       can = gltf.scene;
-      can.userData.flavor = flavor;
-
-      if (flavorConfig.resetRoot) {
-        const specialRoot = can.children[0];
-        if (specialRoot) {
-          specialRoot.position.set(0, 0, 0);
-        }
-      }
+      can.userData.flavor = currentCanFlavor;
 
       const box = new THREE.Box3().setFromObject(can);
       const center = box.getCenter(new THREE.Vector3());
@@ -379,12 +380,11 @@ function loadMainCan(flavor = "classic") {
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
       can.position.sub(center);
-      canBaseScale = flavorConfig.scaleDivisor / maxDim;
+      canBaseScale = MAIN_CAN_SCALE_DIVISOR / maxDim;
 
-      applyMainCanMaterials(can, flavor);
+      applyMainCanMaterials(can);
 
       scene.add(can);
-      currentCanFlavor = flavor;
       updateMainCan(getScrollProgress());
     },
     undefined,
@@ -455,6 +455,9 @@ function updateMainCan(progress) {
   rubLight.intensity = lerp(rubLight.intensity, glowTarget, 0.08);
 
   canMaterials.forEach((material) => {
+    material.color.lerp(targetCanColor, 0.06);
+    currentCanColor.copy(material.color);
+
     if (!("emissive" in material)) return;
 
     material.emissive.setRGB(
@@ -557,18 +560,22 @@ function applyFlavorTheme(flavor) {
   });
 }
 
+function setCanFlavor(flavor) {
+  const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
+
+  currentCanFlavor = flavor || "classic";
+  targetCanColor.set(flavorConfig.color);
+
+  if (can) {
+    can.userData.flavor = currentCanFlavor;
+  }
+}
+
 productCards.forEach((card) => {
   const activate = () => {
-    const flavor = card.dataset.flavor || null;
+    const flavor = card.dataset.flavor || "classic";
     applyFlavorTheme(flavor);
-
-    if (flavor === "zero" && currentCanFlavor !== "zero") {
-      loadMainCan("zero");
-    } else if (flavor === "cherry" && currentCanFlavor !== "cherry") {
-      loadMainCan("cherry");
-    } else if (flavor === "classic" && currentCanFlavor !== "classic") {
-      loadMainCan("classic");
-    }
+    setCanFlavor(flavor);
   };
 
   card.addEventListener("click", activate);
@@ -670,7 +677,7 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-loadMainCan("classic");
+loadMainCan();
 syncMagicRevealState();
 ensureHeroBubbles();
 ensureMagicBurstBubbles();
