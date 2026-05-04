@@ -417,6 +417,9 @@ function updateMotionTrail(progress) {
 function updateMainCan(progress) {
   if (!can) return;
 
+  const isMobile = window.innerWidth <= 640;
+  const isTablet = window.innerWidth > 640 && window.innerWidth <= 1024;
+  const isCompact = window.innerWidth <= 1024;
   const state = getInterpolatedState(progress);
   const smooth = 0.08;
   const collectionStart = sectionStops.collection ?? 0.25;
@@ -477,6 +480,7 @@ function updateMainCan(progress) {
   let finalRy = current.ry + canSpin;
   let finalRz = current.rz;
   let finalScale = current.scale;
+  const isHero = progress < collectionStart;
 
   if (progress > 0 && progress < collectionStart + 0.04) {
     finalX += Math.sin(heroDrift * Math.PI) * 0.04;
@@ -497,6 +501,41 @@ function updateMainCan(progress) {
     finalRz -= 0.02;
     finalRx += 0.02;
     finalRy = lerp(finalRy, 0.64, 0.1);
+  }
+
+  if (isHero && isMobile) {
+    finalX = 0.12;
+    finalY = 0.05;
+    finalScale *= 0.55;
+  }
+
+  if (isHero && isTablet) {
+    finalX = 0.45;
+    finalY = 0.12;
+    finalScale *= 0.72;
+  }
+
+  if (!isHero && isCompact) {
+    finalX = clamp(finalX, -0.2, 0.45);
+    finalY = clamp(finalY, -0.58, 0.68);
+  }
+
+  if (isMagicActive) {
+    finalX = 1.45;
+    finalY = 0.1;
+    finalScale *= 0.9;
+  }
+
+  if (isMobile && isMagicActive) {
+    finalX = 0.68;
+    finalY = 0.15;
+    finalScale *= 0.65;
+  }
+
+  if (isTablet && isMagicActive) {
+    finalX = 1.32;
+    finalY = 0.12;
+    finalScale *= 0.75;
   }
 
   can.position.set(finalX, finalY, finalZ);
@@ -552,14 +591,19 @@ function isMagicPanelActive() {
 
 function isPointerInCanZone(x, y) {
   const projected = updateCanScreenPosition();
+  const isCompact = window.innerWidth <= 1024;
   const fallbackX = window.innerWidth * 0.5;
   const fallbackY = window.innerHeight * 0.52;
   const centerX = projected?.x ?? fallbackX;
   const centerY = projected?.y ?? fallbackY;
   const dx = Math.abs(x - centerX);
   const dy = Math.abs(y - centerY);
-  const zoneWidth = isMagicActive ? window.innerWidth * 0.16 : window.innerWidth * 0.2;
-  const zoneHeight = isMagicActive ? window.innerHeight * 0.22 : window.innerHeight * 0.3;
+  const zoneWidth = isMagicActive
+    ? window.innerWidth * (isCompact ? 0.24 : 0.16)
+    : window.innerWidth * (isCompact ? 0.32 : 0.2);
+  const zoneHeight = isMagicActive
+    ? window.innerHeight * (isCompact ? 0.28 : 0.22)
+    : window.innerHeight * (isCompact ? 0.34 : 0.3);
 
   return dx < zoneWidth && dy < zoneHeight;
 }
@@ -589,8 +633,12 @@ function handleShakeMove(currentX, currentY) {
     const dt = Math.max(now - lastPointerTime, 1);
     const speed = dx / dt;
 
-    if (speed > 0.3 && dx > 4) {
-      shakeProgress = clamp(shakeProgress + speed * 0.065, 0, 1);
+    const minSpeed = 0.3;
+    const minDistance = 4;
+    const shakeGain = 0.042;
+
+    if (speed > minSpeed && dx > minDistance) {
+      shakeProgress = clamp(shakeProgress + speed * shakeGain, 0, 1);
     } else if (speed < 0.14) {
       shakeProgress = clamp(shakeProgress - 0.0025, 0, 1);
     }
@@ -637,9 +685,12 @@ window.addEventListener(
   (event) => {
     const touch = event.touches[0];
     if (!touch) return;
+    if (isMagicPanelActive() && isPointerInCanZone(touch.clientX, touch.clientY)) {
+      event.preventDefault();
+    }
     handleShakeMove(touch.clientX, touch.clientY);
   },
-  { passive: true }
+  { passive: false }
 );
 
 window.addEventListener("pointerup", () => {
