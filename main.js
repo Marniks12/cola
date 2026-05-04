@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const canvas = document.querySelector("#three-canvas");
 const magicPanel = document.querySelector("#magic");
 const motionTrail = document.querySelector(".motion-trail");
+const body = document.body;
 const productCards = Array.from(document.querySelectorAll(".product-card"));
 
 const scene = new THREE.Scene();
@@ -59,25 +60,32 @@ let isMagicRevealed = false;
 let hasTriggeredMagicBurst = false;
 let canBaseScale = 1;
 let currentCanFlavor = "classic";
-let outgoingCan = null;
-let outgoingCanBaseScale = 1;
-let canTransitionProgress = 1;
-let canLoadToken = 0;
+
+const canMaterials = [];
 
 const CAN_FLAVOR_CONFIG = {
   classic: {
     path: "/models/coke-can.glb",
     scaleDivisor: 1.45,
+    metalness: 0.3,
+    roughness: 0.22,
+    envMapIntensity: 1.28,
     resetRoot: false,
   },
   zero: {
-    path: "/models/coke-zero.glb",
+    path: "/models/coke_zero.glb",
     scaleDivisor: 1.62,
+    metalness: 0.62,
+    roughness: 0.14,
+    envMapIntensity: 1.55,
     resetRoot: true,
   },
   cherry: {
     path: "/models/cherry.glb",
     scaleDivisor: 1.56,
+    metalness: 0.38,
+    roughness: 0.2,
+    envMapIntensity: 1.34,
     resetRoot: true,
   },
 };
@@ -319,96 +327,64 @@ function getInterpolatedState(progress) {
   };
 }
 
-function prepareCanModel(model, flavorConfig) {
-  if (flavorConfig.resetRoot) {
-    const specialRoot = model.children[0];
-    if (specialRoot) {
-      specialRoot.position.set(0, 0, 0);
-    }
-  }
+function clearCanMaterials() {
+  canMaterials.length = 0;
+}
 
-  const box = new THREE.Box3().setFromObject(model);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+function applyMainCanMaterials(model, flavor) {
+  const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
+  clearCanMaterials();
 
-  model.position.sub(center);
-
-  model.userData.fadeMaterials = [];
   model.traverse((child) => {
     if (!child.isMesh || !child.material) return;
 
-    const materials = Array.isArray(child.material) ? child.material : [child.material];
-    const clonedMaterials = materials.map((material) => {
-      const cloned = material.clone();
-      cloned.userData.originalOpacity = cloned.opacity;
-      cloned.userData.originalTransparent = cloned.transparent;
-      model.userData.fadeMaterials.push(cloned);
-      return cloned;
-    });
+    child.material = child.material.clone();
+    child.material.metalness = flavorConfig.metalness;
+    child.material.roughness = flavorConfig.roughness;
+    child.material.envMapIntensity = flavorConfig.envMapIntensity;
 
-    child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
-  });
+    if ("emissive" in child.material) {
+      child.material.emissive.setRGB(0, 0, 0);
+      child.material.emissiveIntensity = 0;
+    }
 
-  return flavorConfig.scaleDivisor / maxDim;
-}
-
-function setCanOpacity(model, opacity) {
-  if (!model) return;
-
-  const fadeMaterials = model.userData.fadeMaterials || [];
-  fadeMaterials.forEach((material) => {
-    const originalOpacity = material.userData.originalOpacity ?? 1;
-    const originalTransparent = material.userData.originalTransparent ?? false;
-    material.opacity = originalOpacity * opacity;
-    material.transparent = originalTransparent || opacity < 0.999;
-    material.depthWrite = opacity >= 0.999;
-    material.needsUpdate = true;
+    child.material.needsUpdate = true;
+    canMaterials.push(child.material);
   });
 }
 
-function loadMainCan(flavor = "classic", immediate = false) {
+function loadMainCan(flavor = "classic") {
   const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
-  const loadToken = ++canLoadToken;
 
   loader.load(
     flavorConfig.path,
     (gltf) => {
-      if (loadToken !== canLoadToken) {
-        return;
+      if (can) {
+        scene.remove(can);
       }
 
-      const nextCan = gltf.scene;
-      nextCan.userData.flavor = flavor;
-      const nextCanBaseScale = prepareCanModel(nextCan, flavorConfig);
+      can = gltf.scene;
+      can.userData.flavor = flavor;
 
-      if (immediate || !can) {
-        if (can) {
-          scene.remove(can);
+      if (flavorConfig.resetRoot) {
+        const specialRoot = can.children[0];
+        if (specialRoot) {
+          specialRoot.position.set(0, 0, 0);
         }
-
-        can = nextCan;
-        canBaseScale = nextCanBaseScale;
-        currentCanFlavor = flavor;
-        setCanOpacity(can, 1);
-        scene.add(can);
-        updateMainCan(getScrollProgress());
-        return;
       }
 
-      if (outgoingCan) {
-        scene.remove(outgoingCan);
-      }
+      const box = new THREE.Box3().setFromObject(can);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
-      outgoingCan = can;
-      outgoingCanBaseScale = canBaseScale;
-      can = nextCan;
-      canBaseScale = nextCanBaseScale;
-      currentCanFlavor = flavor;
-      canTransitionProgress = 0;
-      setCanOpacity(can, 0);
-      setCanOpacity(outgoingCan, 1);
+      can.position.sub(center);
+      canBaseScale = flavorConfig.scaleDivisor / maxDim;
+
+      applyMainCanMaterials(can, flavor);
+
       scene.add(can);
+      currentCanFlavor = flavor;
       updateMainCan(getScrollProgress());
     },
     undefined,
@@ -478,6 +454,25 @@ function updateMainCan(progress) {
   rubLight.position.set(current.x + 0.18, current.y, 2.6);
   rubLight.intensity = lerp(rubLight.intensity, glowTarget, 0.08);
 
+  canMaterials.forEach((material) => {
+    if (!("emissive" in material)) return;
+
+    material.emissive.setRGB(
+      0.18 * shakeBlend + 0.22 * revealGlow + heritageGlow * 0.04,
+      0.05 * shakeBlend + 0.045 * revealGlow,
+      0.05 * shakeBlend + 0.05 * revealGlow
+    );
+    material.emissiveIntensity =
+      0.12 + heritageGlow * 0.18 + shakeBlend * 1.05 + revealGlow * 1.1;
+  });
+
+  const finalOpacity = isMagicActive ? 0.72 : 1;
+  canMaterials.forEach((material) => {
+    material.transparent = finalOpacity < 1;
+    material.opacity = finalOpacity;
+    material.needsUpdate = true;
+  });
+
   let finalX = current.x;
   let finalY = current.y;
   let finalZ = current.z;
@@ -543,52 +538,37 @@ function updateMainCan(progress) {
     finalScale *= 0.75;
   }
 
-  [can, outgoingCan].forEach((model) => {
-    if (!model) return;
-    const baseScale = model === outgoingCan ? outgoingCanBaseScale : canBaseScale;
-    model.position.set(finalX, finalY, finalZ);
-    model.rotation.set(finalRx, finalRy, finalRz);
-    model.scale.setScalar(baseScale * finalScale);
-  });
-
-  if (outgoingCan) {
-    canTransitionProgress = clamp(canTransitionProgress + 0.045, 0, 1);
-    const fade = easeInOutCubic(canTransitionProgress);
-    setCanOpacity(can, fade);
-    setCanOpacity(outgoingCan, 1 - fade);
-
-    if (canTransitionProgress >= 1) {
-      scene.remove(outgoingCan);
-      outgoingCan = null;
-      outgoingCanBaseScale = 1;
-      setCanOpacity(can, 1);
-    }
-  }
+  can.position.set(finalX, finalY, finalZ);
+  can.rotation.set(finalRx, finalRy, finalRz);
+  can.scale.setScalar(canBaseScale * finalScale);
 }
 
 /* CARD MODELS */
 
 function applyFlavorTheme(flavor) {
+  if (flavor) {
+    body.dataset.theme = flavor;
+  } else {
+    delete body.dataset.theme;
+  }
+
   productCards.forEach((card) => {
     card.classList.toggle("is-selected", Boolean(flavor) && card.dataset.flavor === flavor);
   });
 }
 
-function setCanFlavor(flavor) {
-  const nextFlavor = flavor || "classic";
-
-  if (nextFlavor === currentCanFlavor && canTransitionProgress >= 1) {
-    return;
-  }
-
-  loadMainCan(nextFlavor);
-}
-
 productCards.forEach((card) => {
   const activate = () => {
-    const flavor = card.dataset.flavor || "classic";
+    const flavor = card.dataset.flavor || null;
     applyFlavorTheme(flavor);
-    setCanFlavor(flavor);
+
+    if (flavor === "zero" && currentCanFlavor !== "zero") {
+      loadMainCan("zero");
+    } else if (flavor === "cherry" && currentCanFlavor !== "cherry") {
+      loadMainCan("cherry");
+    } else if (flavor === "classic" && currentCanFlavor !== "classic") {
+      loadMainCan("classic");
+    }
   };
 
   card.addEventListener("click", activate);
@@ -690,7 +670,7 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-loadMainCan("classic", true);
+loadMainCan("classic");
 syncMagicRevealState();
 ensureHeroBubbles();
 ensureMagicBurstBubbles();
