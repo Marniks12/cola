@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const canvas = document.querySelector("#three-canvas");
 const magicPanel = document.querySelector("#magic");
+const shakeInstruction = document.querySelector(".shake-instruction");
 const motionTrail = document.querySelector(".motion-trail");
 const body = document.body;
 const productCards = Array.from(document.querySelectorAll(".product-card"));
@@ -58,6 +59,8 @@ let lastPointerTime = 0;
 let isMagicActive = false;
 let isMagicRevealed = false;
 let hasTriggeredMagicBurst = false;
+let tapShakeUntil = 0;
+let tapRevealTimer = null;
 let canBaseScale = 1;
 let currentCanFlavor = "classic";
 let canLoadRequestId = 0;
@@ -70,6 +73,7 @@ const CAN_FLAVOR_CONFIG = {
   classic: {
     path: "/models/coke-can.glb",
     scaleDivisor: 1.45,
+    heroScale: 1,
     metalness: 0.3,
     roughness: 0.22,
     envMapIntensity: 1.28,
@@ -78,6 +82,7 @@ const CAN_FLAVOR_CONFIG = {
   zero: {
     path: "/models/coke_zero.glb",
     scaleDivisor: 1.62,
+    heroScale: 0.9,
     metalness: 0.62,
     roughness: 0.14,
     envMapIntensity: 1.55,
@@ -86,6 +91,7 @@ const CAN_FLAVOR_CONFIG = {
   cherry: {
     path: "/models/cherry.glb",
     scaleDivisor: 1.56,
+    heroScale: 0.93,
     metalness: 0.38,
     roughness: 0.2,
     envMapIntensity: 1.34,
@@ -448,6 +454,7 @@ function updateMainCan(progress) {
   const isMobile = window.innerWidth <= 640;
   const isTablet = window.innerWidth > 640 && window.innerWidth <= 1024;
   const isCompact = window.innerWidth <= 1024;
+  const flavorConfig = CAN_FLAVOR_CONFIG[currentCanFlavor] ?? CAN_FLAVOR_CONFIG.classic;
   const state = getInterpolatedState(progress);
   const smooth = 0.08;
   const collectionStart = sectionStops.collection ?? 0.25;
@@ -472,11 +479,13 @@ function updateMainCan(progress) {
 
   isMagicActive = isMagicPanelActive();
   const time = performance.now();
-  const shakeBlend = isMagicActive && !isMagicRevealed ? shakeProgress : 0;
+  const tapShakeBlend = time < tapShakeUntil ? 1 : 0;
+  const activeShakeProgress = Math.max(shakeProgress, tapShakeBlend);
+  const shakeBlend = isMagicActive && (!isMagicRevealed || tapShakeBlend > 0) ? activeShakeProgress : 0;
   const revealGlow = isMagicRevealed ? 0.85 + Math.sin(time * 0.004) * 0.12 : 0;
   const heritageGlow = getProgressBetween(heritageStart - 0.04, heritageStart + 0.16, progress);
   const glowTarget = isMagicActive
-    ? 0.35 + shakeProgress * 1.35 + revealGlow * 0.95
+    ? 0.35 + activeShakeProgress * 1.35 + revealGlow * 0.95
     : heritageGlow * 0.4;
 
   rubLight.position.set(current.x + 0.18, current.y, 2.6);
@@ -504,6 +513,9 @@ function updateMainCan(progress) {
   let finalRz = current.rz;
   let finalScale = current.scale;
   const isHero = progress < collectionStart;
+  const heroFlavorBlend =
+    1 - easeInOutCubic(getProgressBetween(collectionStart - 0.04, collectionStart + 0.02, progress));
+  finalScale *= lerp(1, flavorConfig.heroScale ?? 1, heroFlavorBlend);
 
   if (progress > 0 && progress < collectionStart + 0.04) {
     finalX += Math.sin(heroDrift * Math.PI) * 0.04;
@@ -511,10 +523,10 @@ function updateMainCan(progress) {
     finalRz -= heroDrift * 0.08;
   }
 
-  if (isMagicActive && !isMagicRevealed) {
-    finalX += Math.sin(time * 0.09) * shakeProgress * 0.14;
-    finalRz += Math.sin(time * 0.1) * shakeProgress * 0.14;
-    finalRx += Math.cos(time * 0.06) * shakeProgress * 0.04;
+  if (isMagicActive && (!isMagicRevealed || tapShakeBlend > 0)) {
+    finalX += Math.sin(time * 0.09) * activeShakeProgress * 0.14;
+    finalRz += Math.sin(time * 0.1) * activeShakeProgress * 0.14;
+    finalRx += Math.cos(time * 0.06) * activeShakeProgress * 0.04;
   }
 
   if (isMagicRevealed) {
@@ -648,6 +660,10 @@ function isMagicPanelActive() {
   return rect.top < window.innerHeight * 0.72 && rect.bottom > window.innerHeight * 0.28;
 }
 
+function usesTapReveal() {
+  return window.innerWidth <= 1024;
+}
+
 function isPointerInCanZone(x, y) {
   const projected = updateCanScreenPosition();
   const isCompact = window.innerWidth <= 1024;
@@ -667,6 +683,14 @@ function isPointerInCanZone(x, y) {
   return dx < zoneWidth && dy < zoneHeight;
 }
 
+function updateMagicInstruction() {
+  if (!shakeInstruction) return;
+
+  shakeInstruction.textContent = usesTapReveal()
+    ? "Tap the can to reveal the magic"
+    : "Shake the can to reveal the magic";
+}
+
 function syncMagicRevealState() {
   if (!magicPanel) return;
 
@@ -677,7 +701,43 @@ function syncMagicRevealState() {
   }
 }
 
+function revealMagic() {
+  shakeProgress = 1;
+  isMagicRevealed = true;
+
+  if (!hasTriggeredMagicBurst) {
+    hasTriggeredMagicBurst = true;
+    triggerMagicBurst();
+  }
+
+  syncMagicRevealState();
+}
+
+function handleTapReveal(x, y) {
+  isMagicActive = isMagicPanelActive();
+
+  if (!usesTapReveal() || !isMagicActive || isMagicRevealed || !isPointerInCanZone(x, y)) {
+    return false;
+  }
+
+  shakeProgress = 1;
+  tapShakeUntil = performance.now() + 560;
+
+  if (tapRevealTimer) {
+    window.clearTimeout(tapRevealTimer);
+  }
+
+  tapRevealTimer = window.setTimeout(() => {
+    tapRevealTimer = null;
+    revealMagic();
+  }, 360);
+
+  return true;
+}
+
 function handleShakeMove(currentX, currentY) {
+  if (usesTapReveal()) return;
+
   const now = performance.now();
   isMagicActive = isMagicPanelActive();
 
@@ -703,13 +763,7 @@ function handleShakeMove(currentX, currentY) {
     }
 
     if (shakeProgress >= 1) {
-      shakeProgress = 1;
-      isMagicRevealed = true;
-      if (!hasTriggeredMagicBurst) {
-        hasTriggeredMagicBurst = true;
-        triggerMagicBurst();
-      }
-      syncMagicRevealState();
+      revealMagic();
     }
   }
 
@@ -731,6 +785,7 @@ function animate() {
 
 loadMainCan("classic");
 syncMagicRevealState();
+updateMagicInstruction();
 ensureHeroBubbles();
 ensureMagicBurstBubbles();
 applyFlavorTheme(null);
@@ -744,7 +799,7 @@ window.addEventListener(
   (event) => {
     const touch = event.touches[0];
     if (!touch) return;
-    if (isMagicPanelActive() && isPointerInCanZone(touch.clientX, touch.clientY)) {
+    if (!usesTapReveal() && isMagicPanelActive() && isPointerInCanZone(touch.clientX, touch.clientY)) {
       event.preventDefault();
     }
     handleShakeMove(touch.clientX, touch.clientY);
@@ -752,7 +807,8 @@ window.addEventListener(
   { passive: false }
 );
 
-window.addEventListener("pointerup", () => {
+window.addEventListener("pointerup", (event) => {
+  handleTapReveal(event.clientX, event.clientY);
   lastPointerX = null;
   lastPointerTime = 0;
 });
@@ -775,6 +831,7 @@ window.addEventListener("resize", () => {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   sectionStops = getSectionStops();
+  updateMagicInstruction();
 });
 
 const revealItems = document.querySelectorAll(
