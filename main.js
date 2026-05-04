@@ -60,8 +60,11 @@ let isMagicRevealed = false;
 let hasTriggeredMagicBurst = false;
 let canBaseScale = 1;
 let currentCanFlavor = "classic";
+let canLoadRequestId = 0;
 
 const canMaterials = [];
+const transitioningCans = [];
+const CAN_TRANSITION_DURATION = 720;
 
 const CAN_FLAVOR_CONFIG = {
   classic: {
@@ -327,13 +330,21 @@ function getInterpolatedState(progress) {
   };
 }
 
-function clearCanMaterials() {
-  canMaterials.length = 0;
+function clearCanMaterials(targetMaterials = canMaterials) {
+  targetMaterials.length = 0;
 }
 
-function applyMainCanMaterials(model, flavor) {
+function setMaterialOpacity(materials, opacity) {
+  materials.forEach((material) => {
+    material.transparent = opacity < 1;
+    material.opacity = opacity;
+    material.needsUpdate = true;
+  });
+}
+
+function applyMainCanMaterials(model, flavor, targetMaterials = canMaterials) {
   const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
-  clearCanMaterials();
+  clearCanMaterials(targetMaterials);
 
   model.traverse((child) => {
     if (!child.isMesh || !child.material) return;
@@ -349,39 +360,56 @@ function applyMainCanMaterials(model, flavor) {
     }
 
     child.material.needsUpdate = true;
-    canMaterials.push(child.material);
+    targetMaterials.push(child.material);
   });
 }
 
 function loadMainCan(flavor = "classic") {
   const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
+  const requestId = ++canLoadRequestId;
 
   loader.load(
     flavorConfig.path,
     (gltf) => {
-      if (can) {
-        scene.remove(can);
-      }
+      if (requestId !== canLoadRequestId) return;
 
-      can = gltf.scene;
-      can.userData.flavor = flavor;
+      const nextCan = gltf.scene;
+      nextCan.userData.flavor = flavor;
+      nextCan.userData.transitionStartedAt = can ? performance.now() : null;
+      nextCan.userData.transitionDuration = CAN_TRANSITION_DURATION;
 
       if (flavorConfig.resetRoot) {
-        const specialRoot = can.children[0];
+        const specialRoot = nextCan.children[0];
         if (specialRoot) {
           specialRoot.position.set(0, 0, 0);
         }
       }
 
-      const box = new THREE.Box3().setFromObject(can);
+      const box = new THREE.Box3().setFromObject(nextCan);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      const nextBaseScale = flavorConfig.scaleDivisor / maxDim;
+      const nextMaterials = [];
 
-      can.position.sub(center);
-      canBaseScale = flavorConfig.scaleDivisor / maxDim;
+      nextCan.position.sub(center);
+      applyMainCanMaterials(nextCan, flavor, nextMaterials);
 
-      applyMainCanMaterials(can, flavor);
+      if (can) {
+        transitioningCans.push({
+          model: can,
+          materials: [...canMaterials],
+          baseScale: canBaseScale,
+          startedAt: performance.now(),
+          duration: CAN_TRANSITION_DURATION,
+        });
+      }
+
+      can = nextCan;
+      canBaseScale = nextBaseScale;
+      clearCanMaterials();
+      canMaterials.push(...nextMaterials);
+      setMaterialOpacity(canMaterials, can.userData.transitionStartedAt ? 0 : 1);
 
       scene.add(can);
       currentCanFlavor = flavor;
@@ -415,7 +443,7 @@ function updateMotionTrail(progress) {
 }
 
 function updateMainCan(progress) {
-  if (!can) return;
+  if (!can && transitioningCans.length === 0) return;
 
   const isMobile = window.innerWidth <= 640;
   const isTablet = window.innerWidth > 640 && window.innerWidth <= 1024;
@@ -466,12 +494,7 @@ function updateMainCan(progress) {
       0.12 + heritageGlow * 0.18 + shakeBlend * 1.05 + revealGlow * 1.1;
   });
 
-  const finalOpacity = isMagicActive ? 0.72 : 1;
-  canMaterials.forEach((material) => {
-    material.transparent = finalOpacity < 1;
-    material.opacity = finalOpacity;
-    material.needsUpdate = true;
-  });
+  const sceneOpacity = isMagicActive ? 0.72 : 1;
 
   let finalX = current.x;
   let finalY = current.y;
@@ -538,9 +561,45 @@ function updateMainCan(progress) {
     finalScale *= 0.75;
   }
 
+  transitioningCans.forEach((transitioningCan) => {
+    const elapsed = time - transitioningCan.startedAt;
+    const progress = clamp(elapsed / transitioningCan.duration, 0, 1);
+    const fade = easeInOutCubic(progress);
+
+    transitioningCan.model.position.set(finalX, finalY, finalZ);
+    transitioningCan.model.rotation.set(finalRx, finalRy - fade * 0.22, finalRz);
+    transitioningCan.model.scale.setScalar(
+      transitioningCan.baseScale * finalScale * lerp(1, 1.035, fade)
+    );
+    setMaterialOpacity(transitioningCan.materials, sceneOpacity * (1 - fade));
+  });
+
+  for (let index = transitioningCans.length - 1; index >= 0; index -= 1) {
+    const transitioningCan = transitioningCans[index];
+    if (time - transitioningCan.startedAt < transitioningCan.duration) continue;
+
+    scene.remove(transitioningCan.model);
+    transitioningCans.splice(index, 1);
+  }
+
+  if (!can) return;
+
+  const transitionStartedAt = can.userData.transitionStartedAt;
+  const transitionDuration = can.userData.transitionDuration ?? CAN_TRANSITION_DURATION;
+  const transitionProgress = transitionStartedAt
+    ? clamp((time - transitionStartedAt) / transitionDuration, 0, 1)
+    : 1;
+  const transitionEase = easeInOutCubic(transitionProgress);
+
   can.position.set(finalX, finalY, finalZ);
-  can.rotation.set(finalRx, finalRy, finalRz);
-  can.scale.setScalar(canBaseScale * finalScale);
+  can.rotation.set(finalRx, finalRy + (1 - transitionEase) * 0.18, finalRz);
+  can.scale.setScalar(canBaseScale * finalScale * lerp(0.965, 1, transitionEase));
+  setMaterialOpacity(canMaterials, sceneOpacity * transitionEase);
+
+  if (transitionStartedAt && transitionProgress >= 1) {
+    can.userData.transitionStartedAt = null;
+    setMaterialOpacity(canMaterials, sceneOpacity);
+  }
 }
 
 /* CARD MODELS */
