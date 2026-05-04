@@ -59,34 +59,28 @@ let isMagicRevealed = false;
 let hasTriggeredMagicBurst = false;
 let canBaseScale = 1;
 let currentCanFlavor = "classic";
-
-const recolorableCanMaterials = [];
+let outgoingCan = null;
+let outgoingCanBaseScale = 1;
+let canTransitionProgress = 1;
+let canLoadToken = 0;
 
 const CAN_FLAVOR_CONFIG = {
   classic: {
-    color: "#e61c2a",
-    strength: 0,
+    path: "/models/coke-can.glb",
+    scaleDivisor: 1.45,
+    resetRoot: false,
   },
   zero: {
-    color: "#090909",
-    strength: 1,
+    path: "/models/coke-zero.glb",
+    scaleDivisor: 1.62,
+    resetRoot: true,
   },
   cherry: {
-    color: "#c2185b",
-    strength: 1,
+    path: "/models/cherry.glb",
+    scaleDivisor: 1.56,
+    resetRoot: true,
   },
 };
-
-const MAIN_CAN_MODEL_PATH = "/models/coke-can.glb";
-const MAIN_CAN_SCALE_DIVISOR = 1.45;
-const RECOLORABLE_CAN_MATERIAL_NAMES = new Set([
-  "Body",
-  "Can_Base_Red",
-  "Can_Body_Red",
-  "Can_Label_Red",
-  "Body_Red",
-  "Label_Red",
-]);
 
 const current = {
   x: 1.35,
@@ -325,114 +319,95 @@ function getInterpolatedState(progress) {
   };
 }
 
-function clearCanMaterials() {
-  recolorableCanMaterials.length = 0;
-}
+function prepareCanModel(model, flavorConfig) {
+  if (flavorConfig.resetRoot) {
+    const specialRoot = model.children[0];
+    if (specialRoot) {
+      specialRoot.position.set(0, 0, 0);
+    }
+  }
 
-function isRecolorableCanMaterial(material) {
-  if (!material || !material.color) return false;
+  const box = new THREE.Box3().setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
-  return RECOLORABLE_CAN_MATERIAL_NAMES.has(material.name);
-}
+  model.position.sub(center);
 
-function addBodyRecolorShader(material) {
-  material.userData.currentBodyColor = new THREE.Color(CAN_FLAVOR_CONFIG.classic.color);
-  material.userData.targetBodyColor = new THREE.Color(CAN_FLAVOR_CONFIG.classic.color);
-  material.userData.currentBodyStrength = CAN_FLAVOR_CONFIG.classic.strength;
-  material.userData.targetBodyStrength = CAN_FLAVOR_CONFIG.classic.strength;
-
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uBodyTargetColor = {
-      value: material.userData.currentBodyColor,
-    };
-    shader.uniforms.uBodyRecolorStrength = {
-      value: material.userData.currentBodyStrength,
-    };
-
-    material.userData.recolorShader = shader;
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <map_fragment>",
-      `#include <map_fragment>
-#ifdef USE_MAP
-  float redDominance = sampledDiffuseColor.r - max(sampledDiffuseColor.g, sampledDiffuseColor.b);
-  float redMask = smoothstep(0.12, 0.42, redDominance);
-  redMask *= smoothstep(0.25, 0.55, sampledDiffuseColor.r);
-  redMask *= 1.0 - smoothstep(0.72, 0.92, min(min(sampledDiffuseColor.r, sampledDiffuseColor.g), sampledDiffuseColor.b));
-  redMask *= smoothstep(0.08, 0.2, max(max(sampledDiffuseColor.r, sampledDiffuseColor.g), sampledDiffuseColor.b));
-  redMask *= uBodyRecolorStrength;
-
-  float bodyShade = clamp(sampledDiffuseColor.r * 1.15, 0.22, 1.15);
-  diffuseColor.rgb = mix(diffuseColor.rgb, uBodyTargetColor * bodyShade, redMask);
-#endif`
-    );
-    shader.fragmentShader = `
-uniform vec3 uBodyTargetColor;
-uniform float uBodyRecolorStrength;
-${shader.fragmentShader}`;
-  };
-
-  material.needsUpdate = true;
-}
-
-function applyMainCanMaterials(model) {
-  clearCanMaterials();
-  const allMaterials = [];
-
+  model.userData.fadeMaterials = [];
   model.traverse((child) => {
     if (!child.isMesh || !child.material) return;
 
     const materials = Array.isArray(child.material) ? child.material : [child.material];
     const clonedMaterials = materials.map((material) => {
       const cloned = material.clone();
-      cloned.userData.originalColor = cloned.color ? cloned.color.clone() : null;
-      cloned.needsUpdate = true;
-      allMaterials.push(cloned);
-
-      if (isRecolorableCanMaterial(cloned)) {
-        addBodyRecolorShader(cloned);
-        recolorableCanMaterials.push(cloned);
-      }
-
+      cloned.userData.originalOpacity = cloned.opacity;
+      cloned.userData.originalTransparent = cloned.transparent;
+      model.userData.fadeMaterials.push(cloned);
       return cloned;
     });
 
     child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0];
   });
 
-  console.log("All material names:", allMaterials.map((material) => material.name));
-  console.log(
-    "Recolorable materials:",
-    recolorableCanMaterials.map((material) => material.name)
-  );
-
-  if (recolorableCanMaterials.length === 0) {
-    console.warn(
-      "No separate red can material found. Recolor disabled until model material is split/renamed in Blender."
-    );
-  }
+  return flavorConfig.scaleDivisor / maxDim;
 }
 
-function loadMainCan() {
+function setCanOpacity(model, opacity) {
+  if (!model) return;
+
+  const fadeMaterials = model.userData.fadeMaterials || [];
+  fadeMaterials.forEach((material) => {
+    const originalOpacity = material.userData.originalOpacity ?? 1;
+    const originalTransparent = material.userData.originalTransparent ?? false;
+    material.opacity = originalOpacity * opacity;
+    material.transparent = originalTransparent || opacity < 0.999;
+    material.depthWrite = opacity >= 0.999;
+    material.needsUpdate = true;
+  });
+}
+
+function loadMainCan(flavor = "classic", immediate = false) {
+  const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
+  const loadToken = ++canLoadToken;
+
   loader.load(
-    MAIN_CAN_MODEL_PATH,
+    flavorConfig.path,
     (gltf) => {
-      if (can) {
-        scene.remove(can);
+      if (loadToken !== canLoadToken) {
+        return;
       }
 
-      can = gltf.scene;
-      can.userData.flavor = currentCanFlavor;
+      const nextCan = gltf.scene;
+      nextCan.userData.flavor = flavor;
+      const nextCanBaseScale = prepareCanModel(nextCan, flavorConfig);
 
-      const box = new THREE.Box3().setFromObject(can);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      if (immediate || !can) {
+        if (can) {
+          scene.remove(can);
+        }
 
-      can.position.sub(center);
-      canBaseScale = MAIN_CAN_SCALE_DIVISOR / maxDim;
+        can = nextCan;
+        canBaseScale = nextCanBaseScale;
+        currentCanFlavor = flavor;
+        setCanOpacity(can, 1);
+        scene.add(can);
+        updateMainCan(getScrollProgress());
+        return;
+      }
 
-      applyMainCanMaterials(can);
+      if (outgoingCan) {
+        scene.remove(outgoingCan);
+      }
 
+      outgoingCan = can;
+      outgoingCanBaseScale = canBaseScale;
+      can = nextCan;
+      canBaseScale = nextCanBaseScale;
+      currentCanFlavor = flavor;
+      canTransitionProgress = 0;
+      setCanOpacity(can, 0);
+      setCanOpacity(outgoingCan, 1);
       scene.add(can);
       updateMainCan(getScrollProgress());
     },
@@ -503,23 +478,6 @@ function updateMainCan(progress) {
   rubLight.position.set(current.x + 0.18, current.y, 2.6);
   rubLight.intensity = lerp(rubLight.intensity, glowTarget, 0.08);
 
-  recolorableCanMaterials.forEach((material) => {
-    if (!material.userData.targetBodyColor) return;
-
-    material.userData.currentBodyColor.lerp(material.userData.targetBodyColor, 0.06);
-    material.userData.currentBodyStrength = lerp(
-      material.userData.currentBodyStrength,
-      material.userData.targetBodyStrength,
-      0.06
-    );
-
-    const shader = material.userData.recolorShader;
-    if (!shader) return;
-
-    shader.uniforms.uBodyTargetColor.value.copy(material.userData.currentBodyColor);
-    shader.uniforms.uBodyRecolorStrength.value = material.userData.currentBodyStrength;
-  });
-
   let finalX = current.x;
   let finalY = current.y;
   let finalZ = current.z;
@@ -585,9 +543,27 @@ function updateMainCan(progress) {
     finalScale *= 0.75;
   }
 
-  can.position.set(finalX, finalY, finalZ);
-  can.rotation.set(finalRx, finalRy, finalRz);
-  can.scale.setScalar(canBaseScale * finalScale);
+  [can, outgoingCan].forEach((model) => {
+    if (!model) return;
+    const baseScale = model === outgoingCan ? outgoingCanBaseScale : canBaseScale;
+    model.position.set(finalX, finalY, finalZ);
+    model.rotation.set(finalRx, finalRy, finalRz);
+    model.scale.setScalar(baseScale * finalScale);
+  });
+
+  if (outgoingCan) {
+    canTransitionProgress = clamp(canTransitionProgress + 0.045, 0, 1);
+    const fade = easeInOutCubic(canTransitionProgress);
+    setCanOpacity(can, fade);
+    setCanOpacity(outgoingCan, 1 - fade);
+
+    if (canTransitionProgress >= 1) {
+      scene.remove(outgoingCan);
+      outgoingCan = null;
+      outgoingCanBaseScale = 1;
+      setCanOpacity(can, 1);
+    }
+  }
 }
 
 /* CARD MODELS */
@@ -599,26 +575,13 @@ function applyFlavorTheme(flavor) {
 }
 
 function setCanFlavor(flavor) {
-  const flavorConfig = CAN_FLAVOR_CONFIG[flavor] ?? CAN_FLAVOR_CONFIG.classic;
+  const nextFlavor = flavor || "classic";
 
-  currentCanFlavor = flavor || "classic";
-  if (recolorableCanMaterials.length === 0) {
-    if (can) {
-      can.userData.flavor = currentCanFlavor;
-    }
+  if (nextFlavor === currentCanFlavor && canTransitionProgress >= 1) {
     return;
   }
 
-  const targetColor = new THREE.Color(flavorConfig.color);
-
-  recolorableCanMaterials.forEach((material) => {
-    material.userData.targetBodyColor.copy(targetColor);
-    material.userData.targetBodyStrength = flavorConfig.strength;
-  });
-
-  if (can) {
-    can.userData.flavor = currentCanFlavor;
-  }
+  loadMainCan(nextFlavor);
 }
 
 productCards.forEach((card) => {
@@ -727,7 +690,7 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-loadMainCan();
+loadMainCan("classic", true);
 syncMagicRevealState();
 ensureHeroBubbles();
 ensureMagicBurstBubbles();
